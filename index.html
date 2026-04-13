@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Super Snakes</title>
 
 <!-- Link preview for iMessage, Discord, Instagram, etc. -->
@@ -29,9 +29,14 @@
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    min-height: 100dvh;
     font-family: 'Segoe UI', system-ui, sans-serif;
     color: #e0e0e0;
     overflow: hidden;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   #particles-bg {
@@ -198,6 +203,86 @@
     text-align: center;
     letter-spacing: 1px;
   }
+
+  .mobile-only { display: none; }
+  .desktop-only { display: inline; }
+
+  /* D-Pad (hidden on desktop by default) */
+  .dpad {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .dpad-middle { display: flex; gap: 4px; align-items: center; }
+  .dpad-btn {
+    width: 52px; height: 52px;
+    border: 2px solid #333;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.07);
+    color: #ccc;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.1s;
+  }
+  .dpad-btn:active { background: rgba(0,255,136,0.25); border-color: #00ff88; }
+  .dpad-pause { font-size: 0.9rem; font-weight: 700; width: 44px; height: 44px; }
+
+  /* ---- Responsive / Mobile ---- */
+  @media (max-width: 700px) {
+    body { overflow: auto; align-items: flex-start; padding: 8px 0; }
+    .game-wrapper { gap: 6px; }
+    h1 { font-size: 1.6rem; }
+    .top-bar, .level-bar { width: 100%; padding: 0 8px; }
+    .top-bar { flex-wrap: wrap; gap: 4px; }
+    .score-display { font-size: 1rem; }
+    .high-score { font-size: 0.75rem; }
+    .speed-display { font-size: 0.75rem; }
+    .level-info { font-size: 0.75rem; }
+    .level-goal { font-size: 0.7rem; }
+    .timer-display { font-size: 0.75rem; }
+
+    .canvas-container { width: 100%; display: flex; justify-content: center; }
+    #gameCanvas { border-radius: 8px; }
+    .overlay {
+      width: 100% !important; height: 100% !important;
+      border-radius: 8px;
+      padding: 16px;
+      gap: 10px;
+    }
+    .overlay h2 { font-size: 1.5rem; }
+    .overlay p { font-size: 0.8rem; }
+    .overlay .final-score { font-size: 2rem; }
+    .level-select { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .level-btn { width: 44px; height: 44px; font-size: 0.9rem; }
+    .level-intro-title { font-size: 1.2rem; }
+    .level-intro-desc { font-size: 0.85rem; }
+    .mode-buttons { gap: 10px; }
+    .btn { padding: 10px 20px; font-size: 1rem; }
+    .stars-result { font-size: 1.5rem; }
+
+    .skin-selector { gap: 5px; flex-wrap: wrap; justify-content: center; }
+    .skin-btn { width: 32px; height: 32px; }
+    .skin-name-tag { font-size: 0.75rem; }
+    .controls-row { gap: 8px; padding: 0 8px; }
+    .powerup-indicator { font-size: 0.7rem; padding: 0 8px; }
+    #hintDesktop { display: none; }
+    .dpad { display: flex; }
+    .mobile-only { display: inline; }
+    .desktop-only { display: none; }
+  }
+
+  @media (max-height: 500px) and (max-width: 700px) {
+    /* Very short phones in landscape */
+    h1 { font-size: 1.2rem; }
+    .dpad-btn { width: 40px; height: 40px; font-size: 1rem; }
+    .dpad-pause { width: 34px; height: 34px; }
+  }
 </style>
 </head>
 <body>
@@ -227,8 +312,9 @@
     <!-- MAIN MENU -->
     <div class="overlay" id="menuOverlay">
       <h2>SUPER SNAKES</h2>
-      <p>Arrow keys or WASD to move<br>
-         Mouse click to set direction<br>
+      <p><span class="desktop-only">Arrow keys or WASD to move<br>
+         Mouse click to set direction</span><span class="mobile-only">Swipe or use the D-Pad to move<br>
+         Tap to set direction</span><br>
          Eat apples, grab power-ups, don't crash!</p>
       <div class="mode-buttons">
         <button class="btn btn-play" id="classicBtn">CLASSIC</button>
@@ -302,8 +388,19 @@
     <button class="btn btn-pause" id="pauseBtn">Pause (P)</button>
   </div>
 
-  <div class="hint">
+  <div class="hint" id="hintDesktop">
     Arrow Keys / WASD to steer | Click / tap to aim | P to pause | Collect stars for power-ups
+  </div>
+
+  <!-- Mobile D-Pad (hidden on desktop) -->
+  <div class="dpad" id="dpad">
+    <button class="dpad-btn dpad-up" id="dpadUp">&#9650;</button>
+    <div class="dpad-middle">
+      <button class="dpad-btn dpad-left" id="dpadLeft">&#9664;</button>
+      <button class="dpad-btn dpad-pause" id="dpadPauseBtn">II</button>
+      <button class="dpad-btn dpad-right" id="dpadRight">&#9654;</button>
+    </div>
+    <button class="dpad-btn dpad-down" id="dpadDown">&#9660;</button>
   </div>
 </div>
 
@@ -1046,7 +1143,7 @@ canvas.addEventListener('mouseleave', () => { mousePos = null; });
 canvas.addEventListener('click', (e) => {
   if (!gameRunning || gamePaused) return;
   const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const mx = (e.clientX - rect.left) / canvasScale, my = (e.clientY - rect.top) / canvasScale;
   const head = snake[0];
   const dx = mx - (head.x*CELL+CELL/2), dy = my - (head.y*CELL+CELL/2);
   let nd;
@@ -1058,6 +1155,98 @@ canvas.addEventListener('click', (e) => {
 window.addEventListener('keydown', (e) => {
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
 });
+
+// ---- Mobile: Canvas Resize ----
+let canvasScale = 1;
+function resizeCanvas() {
+  const maxW = Math.min(window.innerWidth - 16, 640);
+  // Leave room for HUD + d-pad on mobile (roughly 280px)
+  const maxH = Math.min(window.innerHeight - 280, 640);
+  const size = Math.min(maxW, maxH);
+  if (size < 640) {
+    canvasScale = size / 640;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+  } else {
+    canvasScale = 1;
+    canvas.style.width = '';
+    canvas.style.height = '';
+  }
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ---- Mobile: Swipe Controls ----
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+const SWIPE_THRESHOLD = 20;
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+  touchStartTime = Date.now();
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (e.changedTouches.length === 0) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStartX;
+  const dy = t.clientY - touchStartY;
+  const elapsed = Date.now() - touchStartTime;
+
+  // Quick tap = treat like click (aim toward tap point)
+  if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD && elapsed < 300) {
+    if (!gameRunning || gamePaused) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = (t.clientX - rect.left) / canvasScale;
+    const my = (t.clientY - rect.top) / canvasScale;
+    const head = snake[0];
+    const hdx = mx - (head.x * CELL + CELL / 2);
+    const hdy = my - (head.y * CELL + CELL / 2);
+    let nd;
+    if (Math.abs(hdx) > Math.abs(hdy)) nd = hdx > 0 ? {x:1,y:0} : {x:-1,y:0};
+    else nd = hdy > 0 ? {x:0,y:1} : {x:0,y:-1};
+    if (nd.x !== -direction.x || nd.y !== -direction.y) nextDirection = nd;
+    return;
+  }
+
+  // Swipe
+  if (!gameRunning || gamePaused) return;
+  let nd = null;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    nd = dx > 0 ? {x:1,y:0} : {x:-1,y:0};
+  } else {
+    nd = dy > 0 ? {x:0,y:1} : {x:0,y:-1};
+  }
+  if (nd && (nd.x !== -direction.x || nd.y !== -direction.y)) nextDirection = nd;
+}, { passive: false });
+
+// ---- Mobile: D-Pad Buttons ----
+function bindDpad(id, dir) {
+  const btn = document.getElementById(id);
+  const handler = (e) => {
+    e.preventDefault();
+    if (!gameRunning || gamePaused) return;
+    if (dir.x !== -direction.x || dir.y !== -direction.y) nextDirection = dir;
+  };
+  btn.addEventListener('touchstart', handler, { passive: false });
+  btn.addEventListener('mousedown', handler);
+}
+bindDpad('dpadUp', {x:0,y:-1});
+bindDpad('dpadDown', {x:0,y:1});
+bindDpad('dpadLeft', {x:-1,y:0});
+bindDpad('dpadRight', {x:1,y:0});
+
+document.getElementById('dpadPauseBtn').addEventListener('touchstart', (e) => {
+  e.preventDefault(); togglePause();
+}, { passive: false });
+document.getElementById('dpadPauseBtn').addEventListener('click', togglePause);
 
 // ---- Game Loop ----
 let lastTick = 0, animFrame;

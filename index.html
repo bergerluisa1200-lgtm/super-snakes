@@ -387,6 +387,7 @@
         <button class="btn btn-play" id="classicBtn">CLASSIC</button>
         <button class="btn btn-challenge" id="challengeBtn">CHALLENGE</button>
       </div>
+      <button class="btn btn-challenge" id="dailyBtn" style="background:linear-gradient(135deg,#aa44ff,#6600cc)">DAILY</button>
       <button class="btn btn-lb" id="showLeaderboardBtn">LEADERBOARD</button>
       <p style="font-size:0.75rem; color:#555">Choose a mode to play</p>
     </div>
@@ -448,7 +449,7 @@
       <h2 style="color:#00ff88">SUBMIT SCORE</h2>
       <div class="final-score" id="nameEntryScore">0</div>
       <p>Enter your name for the leaderboard:</p>
-      <input class="name-input" id="nameInput" type="text" placeholder="Your name" maxlength="16" autocomplete="off" spellcheck="false">
+      <input class="name-input" id="nameInput" type="text" placeholder="Your name" maxlength="7" autocomplete="off" spellcheck="false">
       <div class="mode-buttons">
         <button class="btn btn-play" id="submitScoreBtn">SUBMIT</button>
         <button class="btn btn-back" id="skipScoreBtn">SKIP</button>
@@ -461,6 +462,7 @@
       <div class="lb-tabs">
         <button class="lb-tab active" id="lbTabClassic">Classic</button>
         <button class="lb-tab" id="lbTabChallenge">Challenge</button>
+        <button class="lb-tab" id="lbTabDaily">Daily</button>
       </div>
       <div id="leaderboardContent"></div>
       <div class="mode-buttons">
@@ -529,6 +531,69 @@
   }
   anim();
 })();
+
+// ==================== SOUND EFFECTS ====================
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function resumeAudio() { if (audioCtx.state === 'suspended') audioCtx.resume(); }
+document.addEventListener('click', resumeAudio, { once: true });
+document.addEventListener('touchstart', resumeAudio, { once: true });
+
+function playTone(freq, duration, type, vol) {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type || 'square';
+  o.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  g.gain.setValueAtTime(vol || 0.1, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime + duration);
+}
+
+function sfxEat() {
+  playTone(600, 0.08, 'square', 0.12);
+  setTimeout(() => playTone(900, 0.1, 'square', 0.1), 50);
+}
+function sfxPowerup() {
+  playTone(400, 0.1, 'sine', 0.1);
+  setTimeout(() => playTone(600, 0.1, 'sine', 0.1), 80);
+  setTimeout(() => playTone(800, 0.15, 'sine', 0.1), 160);
+}
+function sfxDeath() {
+  playTone(300, 0.15, 'sawtooth', 0.12);
+  setTimeout(() => playTone(200, 0.2, 'sawtooth', 0.1), 100);
+  setTimeout(() => playTone(100, 0.4, 'sawtooth', 0.08), 200);
+}
+function sfxPoison() {
+  playTone(150, 0.2, 'sawtooth', 0.1);
+  setTimeout(() => playTone(100, 0.3, 'sawtooth', 0.08), 100);
+}
+function sfxCombo() {
+  playTone(800, 0.06, 'sine', 0.08);
+  setTimeout(() => playTone(1000, 0.06, 'sine', 0.08), 40);
+  setTimeout(() => playTone(1200, 0.1, 'sine', 0.1), 80);
+}
+function sfxLevelComplete() {
+  [523,659,784,1047].forEach((f,i) => setTimeout(() => playTone(f, 0.2, 'sine', 0.1), i*120));
+}
+
+// ==================== SCREEN SHAKE ====================
+let shakeAmount = 0;
+let shakeDuration = 0;
+let shakeStart = 0;
+function triggerShake(amount, duration) {
+  shakeAmount = amount;
+  shakeDuration = duration;
+  shakeStart = Date.now();
+}
+function applyShake() {
+  if (shakeDuration <= 0) return;
+  const elapsed = Date.now() - shakeStart;
+  if (elapsed > shakeDuration) { shakeDuration = 0; canvas.style.transform = ''; return; }
+  const decay = 1 - elapsed / shakeDuration;
+  const dx = (Math.random() - 0.5) * shakeAmount * decay * 2;
+  const dy = (Math.random() - 0.5) * shakeAmount * decay * 2;
+  canvas.style.transform = `translate(${dx}px, ${dy}px)`;
+}
 
 // ==================== GAME ====================
 const canvas = document.getElementById('gameCanvas');
@@ -883,6 +948,53 @@ const LEVELS = [
   }
 ];
 
+// ==================== DAILY CHALLENGE ====================
+function getDailySeed() {
+  const d = new Date();
+  return d.getFullYear() * 10000 + (d.getMonth()+1) * 100 + d.getDate();
+}
+function seededRandom(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+function generateDailyLevel() {
+  const seed = getDailySeed();
+  const rng = seededRandom(seed);
+  const w = [];
+  // Generate random walls based on seed
+  const numWalls = Math.floor(rng() * 30) + 20;
+  for (let i = 0; i < numWalls; i++) {
+    const x = Math.floor(rng() * (COLS - 4)) + 2;
+    const y = Math.floor(rng() * (ROWS - 4)) + 2;
+    // Avoid center spawn area
+    if (Math.abs(x - COLS/2) < 5 && Math.abs(y - ROWS/2) < 3) continue;
+    w.push({x, y});
+    // Sometimes extend the wall
+    if (rng() > 0.5) {
+      const dir = rng() > 0.5 ? {x:1,y:0} : {x:0,y:1};
+      for (let j = 1; j <= Math.floor(rng()*4)+1; j++) {
+        const nx = x + dir.x*j, ny = y + dir.y*j;
+        if (nx >= 1 && nx < COLS-1 && ny >= 1 && ny < ROWS-1) {
+          if (Math.abs(nx - COLS/2) < 5 && Math.abs(ny - ROWS/2) < 3) continue;
+          w.push({x:nx, y:ny});
+        }
+      }
+    }
+  }
+  const spd = 1 + rng() * 1.2;
+  const apples = Math.floor(rng() * 6) + 8;
+  return {
+    id: 'daily', name: `Daily ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})}`,
+    desc: `Today's unique challenge! Seed: ${seed}`,
+    goal: `Eat ${apples} apples in 45 seconds`,
+    targetApples: apples, timeLimit: 45, startSpeed: Math.round(spd*10)/10,
+    walls: w
+  };
+}
+
 // Load progress from localStorage
 let levelProgress = JSON.parse(localStorage.getItem('snakeLevelProgress') || '{}');
 // Level 1 always unlocked
@@ -901,6 +1013,23 @@ let levelApplesEaten = 0;
 let levelStartTime = 0;
 let walls = [];
 let wallSet = new Set();
+
+// Combo system
+let combo = 0;
+let lastEatTime = 0;
+const COMBO_TIMEOUT = 3000; // 3 seconds to keep combo
+
+// Poison apple
+let poisonApple = null;
+
+// Floating text popups
+let floatingTexts = [];
+
+// Snake trail
+let trail = [];
+
+// Moving walls (for challenge levels 7+)
+let movingWalls = [];
 
 highScore = parseInt(localStorage.getItem('snakeHighScore') || '0');
 document.getElementById('highScore').textContent = ` | Best: ${highScore}`;
@@ -951,8 +1080,17 @@ function init() {
   frameCount = 0;
   levelApplesEaten = 0;
   levelStartTime = Date.now();
+  combo = 0;
+  lastEatTime = 0;
+  poisonApple = null;
+  floatingTexts = [];
+  trail = [];
+  movingWalls = [];
+  shakeDuration = 0;
+  canvas.style.transform = '';
   updateScore();
   spawnApple();
+  spawnPoisonApple();
   if (gameMode === 'classic') spawnPowerup();
 }
 
@@ -993,6 +1131,102 @@ function spawnPowerup() {
   } while (occupied.has(`${pos.x},${pos.y}`) && attempts < 1000);
   const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
   powerups.push({ ...pos, ...type, spawnTime: Date.now() });
+}
+
+function spawnPoisonApple() {
+  if (poisonApple) return;
+  if (Math.random() > 0.35) return; // 35% chance
+  const occupied = getOccupiedSet();
+  occupied.add(`${apple.x},${apple.y}`);
+  for (const p of powerups) occupied.add(`${p.x},${p.y}`);
+  let pos, attempts = 0;
+  do {
+    pos = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+    attempts++;
+  } while (occupied.has(`${pos.x},${pos.y}`) && attempts < 1000);
+  if (attempts < 1000) poisonApple = { ...pos, spawnTime: Date.now() };
+}
+
+function addFloatingText(x, y, text, color) {
+  floatingTexts.push({
+    x: x * CELL + CELL/2, y: y * CELL,
+    text, color, life: 1, dy: -1.5
+  });
+}
+
+function updateFloatingTexts() {
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const ft = floatingTexts[i];
+    ft.y += ft.dy;
+    ft.life -= 0.02;
+    if (ft.life <= 0) floatingTexts.splice(i, 1);
+  }
+}
+
+function drawFloatingTexts() {
+  for (const ft of floatingTexts) {
+    ctx.globalAlpha = ft.life;
+    ctx.fillStyle = ft.color;
+    ctx.font = `bold ${14 + (1-ft.life)*8}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(ft.text, ft.x, ft.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawTrail() {
+  for (let i = trail.length - 1; i >= 0; i--) {
+    const t = trail[i];
+    t.life -= 0.04;
+    if (t.life <= 0) { trail.splice(i, 1); continue; }
+    ctx.globalAlpha = t.life * 0.3;
+    ctx.fillStyle = t.color;
+    ctx.beginPath();
+    ctx.arc(t.x * CELL + CELL/2, t.y * CELL + CELL/2, CELL/2 * t.life, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPoisonApple() {
+  if (!poisonApple) return;
+  const px = poisonApple.x*CELL+CELL/2, py = poisonApple.y*CELL+CELL/2;
+  const age = Date.now() - poisonApple.spawnTime;
+  const blink = age > 6000 ? (Math.sin(Date.now()/80) > 0 ? 1 : 0.4) : 1;
+  ctx.globalAlpha = blink;
+  // Dark evil apple
+  ctx.shadowColor = '#8800aa'; ctx.shadowBlur = 10;
+  ctx.fillStyle = '#440066';
+  ctx.beginPath(); ctx.arc(px, py+1, 8, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  // Skull mark
+  ctx.fillStyle = '#cc44ff';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('\u2620', px, py+1);
+  ctx.globalAlpha = 1;
+}
+
+function drawComboMeter() {
+  if (combo < 2) return;
+  const now = Date.now();
+  const remaining = COMBO_TIMEOUT - (now - lastEatTime);
+  if (remaining <= 0) { combo = 0; return; }
+  // Combo text
+  const pulse = Math.sin(now / 100) * 0.1 + 0.9;
+  ctx.globalAlpha = pulse;
+  ctx.fillStyle = combo >= 5 ? '#ff44cc' : combo >= 3 ? '#ffaa00' : '#00ff88';
+  ctx.font = `bold ${18 + combo*2}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText(`COMBO x${combo}`, 10, 28);
+  // Timer bar
+  const barW = 80;
+  const pct = remaining / COMBO_TIMEOUT;
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(10, 34, barW, 4);
+  ctx.fillStyle = combo >= 5 ? '#ff44cc' : '#00ff88';
+  ctx.fillRect(10, 34, barW * pct, 4);
+  ctx.globalAlpha = 1;
 }
 
 function updateScore() {
@@ -1373,13 +1607,19 @@ function gameLoop(timestamp) {
 function drawFrame() {
   drawGrid();
   drawWalls();
+  drawTrail();
   drawMouseIndicator();
+  drawPoisonApple();
   drawApple();
   drawPowerups();
   drawSnake();
   drawParticles();
   updateParticles();
+  drawFloatingTexts();
+  updateFloatingTexts();
+  drawComboMeter();
   drawPowerupStatus();
+  applyShake();
   if (gameMode === 'challenge') updateLevelHUD();
 }
 
@@ -1389,8 +1629,13 @@ function update() {
   const head = snake[0];
   const newHead = { x: head.x + direction.x, y: head.y + direction.y };
 
+  // Add trail from old head position
+  trail.push({ x: head.x, y: head.y, life: 1, color: SKINS[currentSkin].head });
+  if (trail.length > 30) trail.shift();
+
   // Wall collision (borders)
   if (newHead.x < 0 || newHead.x >= COLS || newHead.y < 0 || newHead.y >= ROWS) {
+    sfxDeath(); triggerShake(8, 300);
     if (gameMode === 'challenge') challengeFail('Hit the border!');
     else gameOver();
     return;
@@ -1398,6 +1643,7 @@ function update() {
 
   // Wall collision (level walls)
   if (wallSet.has(`${newHead.x},${newHead.y}`)) {
+    sfxDeath(); triggerShake(8, 300);
     if (gameMode === 'challenge') challengeFail('Hit a wall!');
     else gameOver();
     return;
@@ -1407,6 +1653,7 @@ function update() {
   if (!activePowerups.ghost) {
     for (let i = 0; i < snake.length; i++) {
       if (snake[i].x === newHead.x && snake[i].y === newHead.y) {
+        sfxDeath(); triggerShake(8, 300);
         if (gameMode === 'challenge') challengeFail('Hit yourself!');
         else gameOver();
         return;
@@ -1418,14 +1665,29 @@ function update() {
 
   // Apple check
   if (newHead.x === apple.x && newHead.y === apple.y) {
+    sfxEat(); triggerShake(3, 100);
+
+    // Combo logic
+    const now = Date.now();
+    if (now - lastEatTime < COMBO_TIMEOUT) {
+      combo++;
+      if (combo >= 2) { sfxCombo(); addFloatingText(apple.x, apple.y, `COMBO x${combo}!`, '#ffaa00'); }
+    } else {
+      combo = 1;
+    }
+    lastEatTime = now;
+
     let points = 10;
     if (activePowerups.double_points) points *= 2;
+    points *= Math.min(combo, 5); // combo multiplier capped at 5x
     score += points;
     levelApplesEaten++;
     addParticles(apple.x, apple.y, '#ff2244', 15);
+    addFloatingText(apple.x, apple.y - 1, `+${points}`, '#00ff88');
 
     // Check level completion
     if (gameMode === 'challenge' && currentLevel && levelApplesEaten >= currentLevel.targetApples) {
+      sfxLevelComplete();
       levelComplete();
       return;
     }
@@ -1435,19 +1697,40 @@ function update() {
     // Speed up every 5 apples
     if (score % 50 === 0) speed = Math.min(speed + 0.15, 4);
 
-    // Power-ups (more common in classic, rarer in challenge)
+    // Power-ups
     const pChance = gameMode === 'challenge' ? 0.25 : 0.4;
     if (Math.random() < pChance) spawnPowerup();
+
+    // Maybe spawn poison apple
+    if (!poisonApple && Math.random() < 0.3) spawnPoisonApple();
 
     updateScore();
   } else {
     snake.pop();
   }
 
+  // Poison apple check
+  if (poisonApple && newHead.x === poisonApple.x && newHead.y === poisonApple.y) {
+    sfxPoison(); triggerShake(5, 200);
+    score = Math.max(0, score - 20);
+    combo = 0;
+    speed = Math.min(speed + 0.3, 4);
+    addParticles(poisonApple.x, poisonApple.y, '#8800aa', 20);
+    addFloatingText(poisonApple.x, poisonApple.y, '-20', '#ff2244');
+    poisonApple = null;
+    updateScore();
+  }
+
+  // Despawn old poison apple
+  if (poisonApple && Date.now() - poisonApple.spawnTime > 8000) {
+    poisonApple = null;
+  }
+
   // Powerup check
   for (let i = powerups.length - 1; i >= 0; i--) {
     const p = powerups[i];
     if (newHead.x === p.x && newHead.y === p.y) {
+      sfxPowerup();
       activatePowerup(p);
       addParticles(p.x, p.y, p.color, 20);
       powerups.splice(i, 1);
@@ -1457,12 +1740,34 @@ function update() {
   }
 
   // Expire active powerups
-  const now = Date.now();
+  const now2 = Date.now();
   for (const [type, data] of Object.entries(activePowerups)) {
-    if (data && now > data.end) delete activePowerups[type];
+    if (data && now2 > data.end) delete activePowerups[type];
   }
 
+  // Expire combo
+  if (Date.now() - lastEatTime > COMBO_TIMEOUT) combo = 0;
+
   if (frameCount % 60 === 0) spawnPowerup();
+
+  // Moving walls update
+  updateMovingWalls();
+}
+
+function updateMovingWalls() {
+  if (movingWalls.length === 0) return;
+  const now = Date.now();
+  for (const mw of movingWalls) {
+    const cycle = ((now - mw.startTime) / mw.speed) % 1;
+    const pos = Math.round(mw.min + (mw.max - mw.min) * (cycle < 0.5 ? cycle * 2 : 2 - cycle * 2));
+    // Remove old position from wallSet
+    wallSet.delete(`${mw.current.x},${mw.current.y}`);
+    // Update position
+    if (mw.axis === 'x') mw.current = { x: pos, y: mw.fixed };
+    else mw.current = { x: mw.fixed, y: pos };
+    // Add new position
+    wallSet.add(`${mw.current.x},${mw.current.y}`);
+  }
 }
 
 function activatePowerup(p) {
@@ -1473,6 +1778,7 @@ function activatePowerup(p) {
   } else {
     activePowerups[p.type] = { end: Date.now() + p.duration };
   }
+  addFloatingText(snake[0].x, snake[0].y - 1, p.desc, p.color);
   updateScore();
 }
 
@@ -1642,7 +1948,8 @@ function levelComplete() {
 
   // Show name entry for challenge score
   if (score > 0) {
-    showNameEntry(score, 'challenge', currentLevel.id);
+    const m = currentLevel.id === 'daily' ? 'daily' : 'challenge';
+    showNameEntry(score, m, currentLevel.id);
   } else {
     showOverlay('levelCompleteOverlay');
     startDemoSnake();
@@ -1681,6 +1988,10 @@ function togglePause() {
 // ---- Button Handlers ----
 document.getElementById('classicBtn').addEventListener('click', startClassicGame);
 document.getElementById('challengeBtn').addEventListener('click', showLevelSelect);
+document.getElementById('dailyBtn').addEventListener('click', () => {
+  currentLevel = generateDailyLevel();
+  showLevelIntro(currentLevel);
+});
 document.getElementById('levelBackBtn').addEventListener('click', goToMenu);
 document.getElementById('levelStartBtn').addEventListener('click', startChallengeLevel);
 document.getElementById('nextLevelBtn').addEventListener('click', () => {
@@ -1699,7 +2010,7 @@ document.getElementById('pauseBtn').addEventListener('click', togglePause);
 // ==================== LEADERBOARD ====================
 const LB_BLOB_ID = '019d8a8d-7a46-7345-8697-4b6eefd34a13';
 const LB_URL = `https://jsonblob.com/api/jsonBlob/${LB_BLOB_ID}`;
-const LB_MAX_ENTRIES = 20;
+const LB_MAX_ENTRIES = 3;
 
 let lbData = { classic: [], challenge: {} };
 let lbTab = 'classic';
@@ -1745,7 +2056,7 @@ async function submitScore(name, scoreVal, mode, levelId) {
   await fetchLeaderboard(); // get latest to avoid overwriting
 
   const entry = {
-    name: name.substring(0, 16),
+    name: name.substring(0, 7),
     score: scoreVal,
     date: new Date().toISOString().split('T')[0]
   };
@@ -1753,6 +2064,12 @@ async function submitScore(name, scoreVal, mode, levelId) {
   if (mode === 'classic') {
     lbData.classic.push(entry);
     lbData.classic = dedupeScores(lbData.classic);
+  } else if (mode === 'daily') {
+    if (!lbData.daily) lbData.daily = {};
+    const key = 'daily_' + getDailySeed();
+    if (!Array.isArray(lbData.daily[key])) lbData.daily[key] = [];
+    lbData.daily[key].push(entry);
+    lbData.daily[key] = dedupeScores(lbData.daily[key]);
   } else if (mode === 'challenge' && levelId) {
     const key = 'level_' + levelId;
     if (!Array.isArray(lbData.challenge[key])) lbData.challenge[key] = [];
@@ -1767,20 +2084,20 @@ function renderLeaderboard() {
   const container = document.getElementById('leaderboardContent');
 
   if (lbTab === 'classic') {
-    const scores = lbData.classic || [];
+    container.innerHTML = buildTable(lbData.classic || []);
+  } else if (lbTab === 'daily') {
+    const key = 'daily_' + getDailySeed();
+    const scores = (lbData.daily && lbData.daily[key]) || [];
     container.innerHTML = buildTable(scores);
   } else {
-    // Challenge: show tabs for each level, default to level 1
     let html = '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-bottom:8px">';
     for (let i = 1; i <= 10; i++) {
-      const key = 'level_' + i;
       const active = (lbChallengeLevel === i) ? 'active' : '';
       html += `<button class="lb-tab ${active}" onclick="lbChallengeLevel=${i};renderLeaderboard();" style="padding:3px 8px;font-size:0.7rem">${i}</button>`;
     }
     html += '</div>';
     const key = 'level_' + lbChallengeLevel;
-    const scores = (lbData.challenge && lbData.challenge[key]) || [];
-    html += buildTable(scores);
+    html += buildTable((lbData.challenge && lbData.challenge[key]) || []);
     container.innerHTML = html;
   }
 }
@@ -1825,18 +2142,16 @@ async function showLeaderboard(returnTo) {
 }
 
 // Tab switching
-document.getElementById('lbTabClassic').addEventListener('click', () => {
-  lbTab = 'classic';
-  document.getElementById('lbTabClassic').classList.add('active');
-  document.getElementById('lbTabChallenge').classList.remove('active');
+function setLbTab(tab) {
+  lbTab = tab;
+  document.getElementById('lbTabClassic').classList.toggle('active', tab === 'classic');
+  document.getElementById('lbTabChallenge').classList.toggle('active', tab === 'challenge');
+  document.getElementById('lbTabDaily').classList.toggle('active', tab === 'daily');
   renderLeaderboard();
-});
-document.getElementById('lbTabChallenge').addEventListener('click', () => {
-  lbTab = 'challenge';
-  document.getElementById('lbTabChallenge').classList.add('active');
-  document.getElementById('lbTabClassic').classList.remove('active');
-  renderLeaderboard();
-});
+}
+document.getElementById('lbTabClassic').addEventListener('click', () => setLbTab('classic'));
+document.getElementById('lbTabChallenge').addEventListener('click', () => setLbTab('challenge'));
+document.getElementById('lbTabDaily').addEventListener('click', () => setLbTab('daily'));
 
 // Submit score button
 document.getElementById('submitScoreBtn').addEventListener('click', async () => {
@@ -1854,12 +2169,13 @@ document.getElementById('submitScoreBtn').addEventListener('click', async () => 
   document.getElementById('submitScoreBtn').disabled = false;
 
   // Show leaderboard with the right tab
-  lbTab = pendingScore.mode === 'classic' ? 'classic' : 'challenge';
+  lbTab = pendingScore.mode;
   if (pendingScore.mode === 'challenge' && pendingScore.levelId) {
     lbChallengeLevel = pendingScore.levelId;
   }
   document.getElementById('lbTabClassic').classList.toggle('active', lbTab === 'classic');
   document.getElementById('lbTabChallenge').classList.toggle('active', lbTab === 'challenge');
+  document.getElementById('lbTabDaily').classList.toggle('active', lbTab === 'daily');
   await showLeaderboard('menuOverlay');
   pendingScore = null;
 });

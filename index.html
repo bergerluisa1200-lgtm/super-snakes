@@ -1729,6 +1729,18 @@ async function saveLeaderboard() {
   } catch(e) { console.warn('Leaderboard save failed:', e); }
 }
 
+// Keep only the best score per name in a list
+function dedupeScores(list) {
+  const best = {};
+  for (const entry of list) {
+    const key = entry.name.toLowerCase();
+    if (!best[key] || entry.score > best[key].score) {
+      best[key] = entry;
+    }
+  }
+  return Object.values(best).sort((a, b) => b.score - a.score).slice(0, LB_MAX_ENTRIES);
+}
+
 async function submitScore(name, scoreVal, mode, levelId) {
   await fetchLeaderboard(); // get latest to avoid overwriting
 
@@ -1740,14 +1752,12 @@ async function submitScore(name, scoreVal, mode, levelId) {
 
   if (mode === 'classic') {
     lbData.classic.push(entry);
-    lbData.classic.sort((a, b) => b.score - a.score);
-    lbData.classic = lbData.classic.slice(0, LB_MAX_ENTRIES);
+    lbData.classic = dedupeScores(lbData.classic);
   } else if (mode === 'challenge' && levelId) {
     const key = 'level_' + levelId;
     if (!Array.isArray(lbData.challenge[key])) lbData.challenge[key] = [];
     lbData.challenge[key].push(entry);
-    lbData.challenge[key].sort((a, b) => b.score - a.score);
-    lbData.challenge[key] = lbData.challenge[key].slice(0, LB_MAX_ENTRIES);
+    lbData.challenge[key] = dedupeScores(lbData.challenge[key]);
   }
 
   await saveLeaderboard();

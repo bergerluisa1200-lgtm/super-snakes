@@ -160,7 +160,72 @@
     font-size: 0.85rem; color: #ffaa00; min-height: 20px;
   }
 
-  .mode-buttons { display: flex; gap: 16px; margin-top: 4px; }
+  .mode-buttons { display: flex; gap: 16px; margin-top: 4px; flex-wrap: wrap; justify-content: center; }
+
+  /* Leaderboard */
+  .leaderboard-table {
+    width: 100%;
+    max-width: 380px;
+    border-collapse: collapse;
+    margin-top: 6px;
+  }
+  .leaderboard-table th {
+    font-size: 0.7rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 8px;
+    border-bottom: 1px solid #2a2a4a;
+    text-align: left;
+  }
+  .leaderboard-table td {
+    padding: 5px 8px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .leaderboard-table tr:nth-child(1) td { color: #ffd700; }
+  .leaderboard-table tr:nth-child(2) td { color: #c0c0c0; }
+  .leaderboard-table tr:nth-child(3) td { color: #cd7f32; }
+  .lb-rank { width: 30px; text-align: center; }
+  .lb-name { font-weight: 600; }
+  .lb-score { text-align: right; font-weight: 700; color: #00ff88; }
+  .lb-empty { color: #555; font-style: italic; font-size: 0.8rem; text-align: center; padding: 16px; }
+
+  .name-input {
+    background: #1a1a3a;
+    border: 2px solid #333;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    padding: 8px 14px;
+    text-align: center;
+    width: 200px;
+    outline: none;
+    font-family: inherit;
+  }
+  .name-input:focus { border-color: #00ff88; }
+  .name-input::placeholder { color: #555; }
+
+  .lb-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .lb-tab {
+    padding: 5px 14px;
+    border: none;
+    border-radius: 6px;
+    background: #1a1a3a;
+    color: #888;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .lb-tab.active { background: #00ff88; color: #0a0a1a; }
+  .lb-tab:hover { color: #fff; }
+
+  .btn-lb { background: #1a1a3a; color: #ffaa00; border: 1px solid #333; font-size: 0.8rem; padding: 6px 14px; }
 
   .level-select {
     display: grid;
@@ -275,6 +340,8 @@
     .dpad { display: flex; }
     .mobile-only { display: inline; }
     .desktop-only { display: none; }
+    .leaderboard-table { max-width: 100%; }
+    .name-input { width: 160px; font-size: 0.9rem; }
   }
 
   @media (max-height: 500px) and (max-width: 700px) {
@@ -320,6 +387,7 @@
         <button class="btn btn-play" id="classicBtn">CLASSIC</button>
         <button class="btn btn-challenge" id="challengeBtn">CHALLENGE</button>
       </div>
+      <button class="btn btn-lb" id="showLeaderboardBtn">LEADERBOARD</button>
       <p style="font-size:0.75rem; color:#555">Choose a mode to play</p>
     </div>
 
@@ -372,6 +440,31 @@
       <div class="mode-buttons">
         <button class="btn btn-challenge" id="retryLevelBtn">RETRY</button>
         <button class="btn btn-back" id="challengeFailBackBtn">Level Select</button>
+      </div>
+    </div>
+
+    <!-- NAME ENTRY (after game over, before leaderboard submit) -->
+    <div class="overlay" id="nameEntryOverlay" style="display:none">
+      <h2 style="color:#00ff88">SUBMIT SCORE</h2>
+      <div class="final-score" id="nameEntryScore">0</div>
+      <p>Enter your name for the leaderboard:</p>
+      <input class="name-input" id="nameInput" type="text" placeholder="Your name" maxlength="16" autocomplete="off" spellcheck="false">
+      <div class="mode-buttons">
+        <button class="btn btn-play" id="submitScoreBtn">SUBMIT</button>
+        <button class="btn btn-back" id="skipScoreBtn">SKIP</button>
+      </div>
+    </div>
+
+    <!-- LEADERBOARD -->
+    <div class="overlay" id="leaderboardOverlay" style="display:none">
+      <h2 style="color:#ffaa00">LEADERBOARD</h2>
+      <div class="lb-tabs">
+        <button class="lb-tab active" id="lbTabClassic">Classic</button>
+        <button class="lb-tab" id="lbTabChallenge">Challenge</button>
+      </div>
+      <div id="leaderboardContent"></div>
+      <div class="mode-buttons">
+        <button class="btn btn-back" id="lbBackBtn">Back</button>
       </div>
     </div>
   </div>
@@ -1385,7 +1478,7 @@ function activatePowerup(p) {
 
 // ---- Overlays ----
 function hideAllOverlays() {
-  ['menuOverlay','levelSelectOverlay','levelIntroOverlay','levelCompleteOverlay','gameOverOverlay','challengeFailOverlay']
+  ['menuOverlay','levelSelectOverlay','levelIntroOverlay','levelCompleteOverlay','gameOverOverlay','challengeFailOverlay','nameEntryOverlay','leaderboardOverlay']
     .forEach(id => document.getElementById(id).style.display = 'none');
 }
 
@@ -1425,8 +1518,13 @@ function gameOver() {
   document.getElementById('finalScore').textContent = score;
   const msg = score >= 200 ? 'Legendary!' : score >= 100 ? 'Amazing run!' : score >= 50 ? 'Great job!' : score >= 20 ? 'Nice try!' : 'Keep practicing!';
   document.getElementById('gameOverMsg').textContent = msg;
-  showOverlay('gameOverOverlay');
-  startDemoSnake();
+  // Show name entry if score > 0
+  if (score > 0) {
+    showNameEntry(score, 'classic');
+  } else {
+    showOverlay('gameOverOverlay');
+    startDemoSnake();
+  }
 }
 
 // ---- Challenge Mode ----
@@ -1542,8 +1640,13 @@ function levelComplete() {
     nextBtn.style.display = 'none';
   }
 
-  showOverlay('levelCompleteOverlay');
-  startDemoSnake();
+  // Show name entry for challenge score
+  if (score > 0) {
+    showNameEntry(score, 'challenge', currentLevel.id);
+  } else {
+    showOverlay('levelCompleteOverlay');
+    startDemoSnake();
+  }
 }
 
 function challengeFail(reason) {
@@ -1592,6 +1695,186 @@ document.getElementById('gameOverMenuBtn').addEventListener('click', goToMenu);
 document.getElementById('retryLevelBtn').addEventListener('click', startChallengeLevel);
 document.getElementById('challengeFailBackBtn').addEventListener('click', showLevelSelect);
 document.getElementById('pauseBtn').addEventListener('click', togglePause);
+
+// ==================== LEADERBOARD ====================
+const LB_BLOB_ID = '019d8a8d-7a46-7345-8697-4b6eefd34a13';
+const LB_URL = `https://jsonblob.com/api/jsonBlob/${LB_BLOB_ID}`;
+const LB_MAX_ENTRIES = 20;
+
+let lbData = { classic: [], challenge: {} };
+let lbTab = 'classic';
+let pendingScore = null; // { score, mode, levelId? }
+let lbReturnTo = 'menuOverlay'; // which overlay to go back to from leaderboard
+
+// Saved player name
+let playerName = localStorage.getItem('snakePlayerName') || '';
+
+async function fetchLeaderboard() {
+  try {
+    const res = await fetch(LB_URL, { headers: { 'Accept': 'application/json' } });
+    if (res.ok) lbData = await res.json();
+    // Ensure structure
+    if (!Array.isArray(lbData.classic)) lbData.classic = [];
+    if (!lbData.challenge || typeof lbData.challenge !== 'object') lbData.challenge = {};
+  } catch(e) { console.warn('Leaderboard fetch failed:', e); }
+}
+
+async function saveLeaderboard() {
+  try {
+    await fetch(LB_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(lbData)
+    });
+  } catch(e) { console.warn('Leaderboard save failed:', e); }
+}
+
+async function submitScore(name, scoreVal, mode, levelId) {
+  await fetchLeaderboard(); // get latest to avoid overwriting
+
+  const entry = {
+    name: name.substring(0, 16),
+    score: scoreVal,
+    date: new Date().toISOString().split('T')[0]
+  };
+
+  if (mode === 'classic') {
+    lbData.classic.push(entry);
+    lbData.classic.sort((a, b) => b.score - a.score);
+    lbData.classic = lbData.classic.slice(0, LB_MAX_ENTRIES);
+  } else if (mode === 'challenge' && levelId) {
+    const key = 'level_' + levelId;
+    if (!Array.isArray(lbData.challenge[key])) lbData.challenge[key] = [];
+    lbData.challenge[key].push(entry);
+    lbData.challenge[key].sort((a, b) => b.score - a.score);
+    lbData.challenge[key] = lbData.challenge[key].slice(0, LB_MAX_ENTRIES);
+  }
+
+  await saveLeaderboard();
+}
+
+function renderLeaderboard() {
+  const container = document.getElementById('leaderboardContent');
+
+  if (lbTab === 'classic') {
+    const scores = lbData.classic || [];
+    container.innerHTML = buildTable(scores);
+  } else {
+    // Challenge: show tabs for each level, default to level 1
+    let html = '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-bottom:8px">';
+    for (let i = 1; i <= 10; i++) {
+      const key = 'level_' + i;
+      const active = (lbChallengeLevel === i) ? 'active' : '';
+      html += `<button class="lb-tab ${active}" onclick="lbChallengeLevel=${i};renderLeaderboard();" style="padding:3px 8px;font-size:0.7rem">${i}</button>`;
+    }
+    html += '</div>';
+    const key = 'level_' + lbChallengeLevel;
+    const scores = (lbData.challenge && lbData.challenge[key]) || [];
+    html += buildTable(scores);
+    container.innerHTML = html;
+  }
+}
+
+let lbChallengeLevel = 1;
+
+function buildTable(scores) {
+  if (scores.length === 0) return '<div class="lb-empty">No scores yet. Be the first!</div>';
+  let html = '<table class="leaderboard-table"><tr><th class="lb-rank">#</th><th class="lb-name">Name</th><th class="lb-score">Score</th></tr>';
+  scores.forEach((s, i) => {
+    const medal = i === 0 ? '\u{1F947}' : i === 1 ? '\u{1F948}' : i === 2 ? '\u{1F949}' : (i + 1);
+    html += `<tr><td class="lb-rank">${medal}</td><td class="lb-name">${escapeHtml(s.name)}</td><td class="lb-score">${s.score}</td></tr>`;
+  });
+  html += '</table>';
+  return html;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Show name entry after game over
+function showNameEntry(scoreVal, mode, levelId) {
+  pendingScore = { score: scoreVal, mode, levelId };
+  document.getElementById('nameEntryScore').textContent = scoreVal;
+  document.getElementById('nameInput').value = playerName;
+  showOverlay('nameEntryOverlay');
+  startDemoSnake();
+  setTimeout(() => document.getElementById('nameInput').focus(), 100);
+}
+
+// Show leaderboard
+async function showLeaderboard(returnTo) {
+  lbReturnTo = returnTo || 'menuOverlay';
+  showOverlay('leaderboardOverlay');
+  startDemoSnake();
+  document.getElementById('leaderboardContent').innerHTML = '<div class="lb-empty">Loading...</div>';
+  await fetchLeaderboard();
+  renderLeaderboard();
+}
+
+// Tab switching
+document.getElementById('lbTabClassic').addEventListener('click', () => {
+  lbTab = 'classic';
+  document.getElementById('lbTabClassic').classList.add('active');
+  document.getElementById('lbTabChallenge').classList.remove('active');
+  renderLeaderboard();
+});
+document.getElementById('lbTabChallenge').addEventListener('click', () => {
+  lbTab = 'challenge';
+  document.getElementById('lbTabChallenge').classList.add('active');
+  document.getElementById('lbTabClassic').classList.remove('active');
+  renderLeaderboard();
+});
+
+// Submit score button
+document.getElementById('submitScoreBtn').addEventListener('click', async () => {
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) { document.getElementById('nameInput').focus(); return; }
+  playerName = name;
+  localStorage.setItem('snakePlayerName', playerName);
+
+  document.getElementById('submitScoreBtn').textContent = 'SAVING...';
+  document.getElementById('submitScoreBtn').disabled = true;
+
+  await submitScore(name, pendingScore.score, pendingScore.mode, pendingScore.levelId);
+
+  document.getElementById('submitScoreBtn').textContent = 'SUBMIT';
+  document.getElementById('submitScoreBtn').disabled = false;
+
+  // Show leaderboard with the right tab
+  lbTab = pendingScore.mode === 'classic' ? 'classic' : 'challenge';
+  if (pendingScore.mode === 'challenge' && pendingScore.levelId) {
+    lbChallengeLevel = pendingScore.levelId;
+  }
+  document.getElementById('lbTabClassic').classList.toggle('active', lbTab === 'classic');
+  document.getElementById('lbTabChallenge').classList.toggle('active', lbTab === 'challenge');
+  await showLeaderboard('menuOverlay');
+  pendingScore = null;
+});
+
+// Skip button
+document.getElementById('skipScoreBtn').addEventListener('click', () => {
+  pendingScore = null;
+  goToMenu();
+});
+
+// Enter key in name input
+document.getElementById('nameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('submitScoreBtn').click();
+});
+
+// Leaderboard back button
+document.getElementById('lbBackBtn').addEventListener('click', () => {
+  showOverlay(lbReturnTo);
+  startDemoSnake();
+});
+
+// Main menu leaderboard button
+document.getElementById('showLeaderboardBtn').addEventListener('click', () => {
+  showLeaderboard('menuOverlay');
+});
 </script>
 </body>
 </html>
